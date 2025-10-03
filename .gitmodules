@@ -1,0 +1,3 @@
+[submodule "external/ops"]
+	path = external/ops
+	url = https://github.com/VaultSovereign/ops.git
