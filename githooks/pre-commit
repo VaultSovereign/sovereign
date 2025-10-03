@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "🔍 ledger pre-commit: preview+validate"
+STRICT=true KEEP=${KEEP:-3} VERBOSE=${VERBOSE:-true} make ledger-maintain-preview
+make receipts-validate-all
+echo "✅ ledger ok"

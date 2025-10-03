@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vaultmesh.org/schemas/receipt.schema.json",
+  "title": "VaultMesh Receipt",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["kind", "ts"],
+  "properties": {
+    "kind": { "type": "string" },
+    "ts":   { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}Z$" },
+    "mode": { "type": "string", "enum": ["dry-run", "apply"] },
+    "params": { "type": "object", "additionalProperties": true },
+    "stats":  { "type": "object", "additionalProperties": true },
+    "files":  {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file"],
+        "properties": {
+          "file": { "type": "string" },
+          "changed": { "type": "boolean" },
+          "diff_lines": { "type": "number" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "links": { "type": "object", "additionalProperties": true },
+    "verify_ok": { "type": "boolean" },
+    "status": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "workstation.preflight" } } },
+      "then": {
+        "required": ["params", "results", "status"],
+        "properties": {
+          "params": {
+            "type": "object",
+            "properties": {
+              "region": { "type": "string" }
+            }
+          },
+          "results": {
+            "type": "object",
+            "required": ["ok", "warn", "fail"],
+            "properties": {
+              "ok":   { "type": "array" },
+              "warn": { "type": "array" },
+              "fail": { "type": "array" }
+            }
+          },
+          "status": { "enum": ["ok", "warn", "fail"] }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "workstation.config" } } },
+      "then": {
+        "required": ["params", "status"],
+        "properties": {
+          "params": {
+            "type": "object",
+            "properties": {
+              "project": { "type": "string" },
+              "region":  { "type": "string" },
+              "cluster": { "type": "string" },
+              "config":  { "type": "string" }
+            }
+          },
+          "status": { "const": "ok" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "workstation.run" } } },
+      "then": {
+        "required": ["mode", "params", "status"],
+        "properties": {
+          "mode": { "enum": ["dry-run", "apply"] },
+          "params": {
+            "type": "object",
+            "properties": {
+              "project": { "type": "string" },
+              "region":  { "type": "string" },
+              "cluster": { "type": "string" },
+              "config":  { "type": "string" },
+              "workstation": { "type": "string" }
+            }
+          },
+          "status": { "const": "ok" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "workstation.delete" } } },
+      "then": {
+        "required": ["params", "status"]
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "workstation.daily" } } },
+      "then": {
+        "required": ["day", "algo", "root", "count", "files"],
+        "properties": {
+          "day":  { "type": "string", "pattern": "^[0-9]{8}$" },
+          "algo": { "enum": ["BLAKE3-256", "SHA256"] },
+          "root": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "count": { "type": "number" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "fixall.run" } } },
+      "then": {
+        "required": ["mode", "params", "stats", "files"],
+        "properties": {
+          "mode": { "enum": ["dry-run", "apply"] },
+          "params": {
+            "type": "object",
+            "properties": {
+              "dry_run":        { "type": "boolean" },
+              "non_vendor_only":{ "type": "boolean" },
+              "search_root":    { "type": "string" },
+              "include":        { "type": "array" },
+              "exclude":        { "type": "array" },
+              "jobs":           { "type": ["number", "null"] }
+            }
+          },
+          "stats": {
+            "type": "object",
+            "required": ["files_scanned", "files_changed", "diff_lines"],
+            "properties": {
+              "files_scanned": { "type": "number" },
+              "files_changed": { "type": "number" },
+              "diff_lines":    { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "maintenance.run" } } },
+      "then": {
+        "required": ["mode", "params", "status", "verify_ok"],
+        "properties": {
+          "mode":   { "enum": ["dry-run", "apply"] },
+          "params": {
+            "type": "object",
+            "properties": {
+              "keep": { "type": "number" },
+              "include": { "type": "array" },
+              "exclude": { "type": "array" },
+              "non_vendor_only": { "type": "boolean" },
+              "jobs": { "type": ["number", "null"] },
+              "strict": { "type": "boolean" }
+            }
+          },
+          "status":    { "enum": ["ok", "verify_mismatch"] },
+          "verify_ok": { "type": "boolean" }
+        }
+      }
+    }
+  ]
+}

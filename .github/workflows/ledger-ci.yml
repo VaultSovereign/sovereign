@@ -1,0 +1,32 @@
+name: Ledger CI
+
+on:
+  push:
+    branches: [ "main", "master", "release/**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  ledger-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq bsdmainutils
+          npm -g i ajv-cli@5 || true
+
+      - name: Preview Maintenance (no writes, strict)
+        env:
+          STRICT: "true"
+          KEEP: "3"
+          VERBOSE: "true"
+        run: |
+          make ledger-maintain-preview
+
+      - name: Validate Receipts
+        run: |
+          make receipts-validate-all
