@@ -1,0 +1,133 @@
+name: Guardian Drill
+
+on:
+  schedule:
+    # Run daily at 07:00 UTC
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: 'latest'
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          
+          # Install b3sum for Merkle roots
+          ARCH=$(dpkg --print-architecture)
+          curl -Lo /tmp/b3sum.tar.gz \
+            "https://github.com/BLAKE3-team/BLAKE3/releases/latest/download/b3sum_linux_${ARCH}_bin.tar.gz"
+          sudo tar -xzf /tmp/b3sum.tar.gz -C /usr/local/bin
+          sudo chmod +x /usr/local/bin/b3sum
+      
+      - name: Set up environment
+        run: |
+          echo "PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" >> $GITHUB_ENV
+          echo "REGION=${{ secrets.GCP_REGION }}" >> $GITHUB_ENV
+          echo "CF_API_TOKEN=${{ secrets.CF_API_TOKEN }}" >> $GITHUB_ENV
+      
+      - name: Run Guardian Drill
+        id: drill
+        run: |
+          chmod +x workstation/drills/guardian-drill.sh
+          ./workstation/drills/guardian-drill.sh
+        continue-on-error: true
+      
+      - name: Commit receipts
+        run: |
+          git config user.name "Guardian Drill Bot"
+          git config user.email "guardian@vaultmesh.org"
+          
+          DATE=$(date -u +%Y-%m-%d)
+          
+          git add workstation/receipts/
+          
+          if git diff --staged --quiet; then
+            echo "No new receipts to commit"
+          else
+            git commit -m "drill: Daily receipts for ${DATE}
+
+Automated Guardian Drill run
+- Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+- Status: ${{ steps.drill.outcome }}
+- Workflow: ${{ github.workflow }}
+- Run: ${{ github.run_number }}"
+            
+            git push
+          fi
+      
+      - name: Report status
+        if: always()
+        run: |
+          if [ "${{ steps.drill.outcome }}" = "success" ]; then
+            echo "✅ Guardian Drill PASSED"
+          else
+            echo "⚠️ Guardian Drill DEGRADED"
+            exit 1
+          fi
+      
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const date = new Date().toISOString().split('T')[0];
+            const title = `🚨 Guardian Drill Failed: ${date}`;
+            const body = `
+            ## Guardian Drill Failure Report
+            
+            **Date:** ${date}
+            **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            ### Details
+            - Drill outcome: ${{ steps.drill.outcome }}
+            - Project: ${{ secrets.GCP_PROJECT_ID }}
+            - Region: ${{ secrets.GCP_REGION }}
+            
+            ### Action Required
+            1. Review drill logs above
+            2. Check ADC authentication
+            3. Verify service account permissions
+            4. Re-run manually: \`make drill\`
+            
+            ### Security Checklist
+            - [ ] ADC working: \`gcloud auth application-default print-access-token\`
+            - [ ] Service accounts exist: \`gcloud iam service-accounts list\`
+            - [ ] Workstation accessible
+            - [ ] No unknown IAM members
+            
+            ---
+            *Automated issue created by Guardian Drill workflow*
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['guardian-drill', 'security', 'automated']
+            });
