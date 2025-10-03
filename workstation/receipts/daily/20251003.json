@@ -1,0 +1,13 @@
+{
+  "kind": "workstation.daily",
+  "day": "20251003",
+  "algo": "SHA256",
+  "root": "b9a77e36128e4e6abbeb49068f4912e4cb1471adaa00e8a8aeb5ad7bcabf6e85",
+  "count": 3,
+  "keep": 3,
+  "files": [
+    "workstation-20251003T132644Z.json",
+    "preflight-20251003T132027Z.json",
+    "drill-20251003T125420Z.json"
+  ]
+}
