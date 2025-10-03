@@ -34,7 +34,7 @@ case "$kind" in
     jq -e '.params|type=="object"' "$f" >/dev/null || { echo "✖ .params required"; exit 1; }
     ;;
   workstation.daily)
-    jq -e '.day and .root and .files|type=="array"' "$f" >/dev/null || { echo "✖ daily shape"; exit 1; }
+    jq -e '(.day and .root and (.files|type=="array"))' "$f" >/dev/null || { echo "✖ daily shape"; exit 1; }
     ;;
   maintenance.run)
     jq -e '.mode and (.verify_ok|type=="boolean")' "$f" >/dev/null || { echo "✖ maintenance shape"; exit 1; }

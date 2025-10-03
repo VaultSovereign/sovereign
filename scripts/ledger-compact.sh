@@ -78,14 +78,16 @@ for day in "${!byday[@]}"; do
 
   # write daily root (unless dry-run)
   if [[ "$DRY_RUN" != "true" ]]; then
+    ts="$(date -u +%Y%m%dT%H%M%SZ)"
     jq -n --arg kind "workstation.daily" \
+          --arg ts "$ts" \
           --arg day "$day" \
           --arg algo "$(have_b3sum && echo BLAKE3-256 || echo SHA256)" \
           --arg root "$root" \
           --argjson count "${#kept[@]}" \
           --argjson keep "$KEEP" \
           --argjson files "$(printf '%s\n' "${kept[@]}" | jq -R . | jq -s .)" \
-          '{kind:$kind, day:$day, algo:$algo, root:$root, count:$count, keep:$keep, files:$files}' \
+          '{kind:$kind, ts:$ts, day:$day, algo:$algo, root:$root, count:$count, keep:$keep, files:$files}' \
           > "$out.tmp"
     if "$VALIDATOR" "$out.tmp"; then
       mv "$out.tmp" "$out"
