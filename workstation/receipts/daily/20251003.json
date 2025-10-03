@@ -1,13 +1,16 @@
 {
   "kind": "workstation.daily",
+  "ts": "20251003T203142Z",
   "day": "20251003",
   "algo": "SHA256",
-  "root": "b9a77e36128e4e6abbeb49068f4912e4cb1471adaa00e8a8aeb5ad7bcabf6e85",
-  "count": 3,
-  "keep": 3,
+  "root": "aa1a21db19c1529bef45602421615a9f3ccba41ef8d57cbe1310c1a15ba66ff7",
+  "count": 5,
+  "keep": 5,
   "files": [
     "workstation-20251003T132644Z.json",
     "preflight-20251003T132027Z.json",
-    "drill-20251003T125420Z.json"
+    "fixall-20251003T151614Z.json",
+    "fixall-20251003T150625Z.json",
+    "fixall-20251003T150017Z.json"
   ]
 }
