@@ -32,7 +32,7 @@ gcloud auth application-default print-access-token >/dev/null && echo "✓ ADC w
 Create the core service accounts for infra and publishing.
 
 ```bash
-make gcloud:iam
+make gcloud-iam
 ```
 
 This will ensure the following SAs exist:
@@ -48,7 +48,7 @@ This will ensure the following SAs exist:
 Build a workstation configuration in your chosen region/cluster.
 
 ```bash
-make gcloud:config
+make gcloud-config
 ```
 
 Reads values from `.env` and `workstation/config.yaml`.
@@ -60,7 +60,7 @@ Reads values from `.env` and `workstation/config.yaml`.
 Spawn a new workstation VM from the config:
 
 ```bash
-make gcloud:workstation
+make gcloud-workstation
 ```
 
 This will output a URL — open it in your browser to access the Sovereign dev box.
@@ -83,7 +83,7 @@ make drill
 
 ## 🔑 Daily Ritual
 
-1. Open workstation (`gcloud workstations workstations open ...` or URL).
+1. Open workstation (`make gcloud-workstation-open` or URL).
 2. Sync repos (meta, infra-dns, infra-servers).
 3. Run drill (`make drill`).
 4. Commit receipts (`git add workstation/receipts && git commit -m "drill receipts <date>"`).
@@ -115,8 +115,19 @@ make drill
 - Add `CHANNEL_DISCOURSE=1` to meta → auto-publish to Polis.
 - Wire `make drill` into Cloud Scheduler → daily automatic receipts.
 - Extend `drills/` with performance checks (disk, CPU, tailscale status).
+- Use `make ledger-maintain-preview` / `make ledger-maintain` for one-command ledger upkeep (add `STRICT=true` in CI, `*-receipt` variants to stamp the run).
 
 ---
 
 **VaultMesh — Earth's Civilization Ledger**  
 Sovereign Workstations prove themselves daily ⚔️
+### Preflight (optional but recommended)
+
+Before provisioning, you can verify identity, APIs, region reachability, quotas and (optionally) network:
+
+```bash
+make gcloud-preflight              # add AUTO_ENABLE=true to auto-enable missing APIs
+make gcloud-preflight-receipt      # same, and emits JSON receipt to workstation/receipts/
+RECEIPT=true make gcloud-config    # config receipt (optional)
+RECEIPT=true make gcloud-workstation   # run receipt (optional)
+```

@@ -10,11 +10,90 @@ Declarative workstation for VaultMesh dev:
 
 ```bash
 cp .env.example .env && nano .env        # fill PROJECT_ID, REGION, SA names
-make gcloud:iam                          # create/verify SAs + roles
-make gcloud:config                       # create Workstation config from YAML
-make gcloud:workstation                  # create a new workstation
+make gcloud-iam                          # create/verify SAs + roles
+make gcloud-config                       # create Workstation config from YAML
+make gcloud-workstation                  # create a new workstation
 # open the URL printed by gcloud, workspace starts with startup.sh
 ```
+
+### Workstations
+- `make gcloud-config` – create/ensure cluster+config
+- `make gcloud-workstation` – create/start workstation
+- `make gcloud-workstation-open` – print the access URL (no create/start)
+- `make gcloud-workstation-delete` – stop (default) and delete the workstation
+- `make gcloud-preflight` – verify ADC, APIs, region reachability, quotas, and (optionally) network
+- `make gcloud-preflight-receipt` – same as preflight, but also writes a JSON receipt to `workstation/receipts/`
+  Receipts for other steps (opt-in):
+  - `RECEIPT=true make gcloud-config` (or `make gcloud-config-receipt`)
+  - `RECEIPT=true make gcloud-workstation` (or `make gcloud-workstation-receipt`)
+  - `RECEIPT=true make gcloud-workstation-delete` (or `make gcloud-workstation-delete-receipt`)
+
+#### Env overrides
+- `PROJECT_ID`, `REGION` (default `europe-west3`), `WORKSTATION_CONFIG`/`CONFIG_ID`, `WORKSTATION_CLUSTER`/`CLUSTER_ID`, `WORKSTATION_ID`
+- Delete behavior: `STOP_FIRST=true|false` (default true), `FORCE=true|false` (default false)
+- Preflight: `AUTO_ENABLE=true|false` (default false), `NETWORK`, `SUBNETWORK`
+- Receipts: `RECEIPT=true` (Make target already sets this), `RECEIPTS_DIR` (default `workstation/receipts`)
+
+### Ledger
+- `make ledger-compact` – compute daily Merkle roots of receipts and prune older receipts per day (default KEEP=5).
+  Env: `RECEIPTS_DIR`, `DAILY_DIR`, `KEEP` (optional).
+- `make ledger-compact-dryrun` – show exactly which receipts would be kept/pruned and the resulting root(s), but perform no writes/deletes.
+  Env: `KEEP`, `VERBOSE=true|false` (default true), plus `RECEIPTS_DIR`/`DAILY_DIR`.
+- `make ledger-verify` – recompute and verify stored daily roots.  
+  Env: `RECEIPTS_DIR`, `DAILY_DIR`, `DAY=YYYYMMDD` (optional single-day), `STRICT=true|false` (fail if any listed file missing; default false).
+
+### Maintenance (one command)
+- `make ledger-maintain-preview` – plan-only: compact (dry-run), verify, and fix-all preview (with its own receipt).  
+  Env passthrough: `KEEP`, `VERBOSE`, `INCLUDE`, `EXCLUDE`, `NON_VENDOR_ONLY`, `JOBS`, `SEARCH_ROOT`
+- `make ledger-maintain` – apply: compact, verify, and fix-all apply (writes).  
+- Ledger options:  
+  - `make ledger-maintain-preview-receipt` – preview + top-level maintenance receipt  
+  - `make ledger-maintain-receipt` – apply + top-level maintenance receipt
+- Strict / CI helpers:  
+  - `make ledger-maintain-preview-strict` (or `STRICT=true make ledger-maintain-preview`) to fail fast when verify mismatches.  
+  - `make ledger-maintain-strict` for the apply path, and `make ci-ledger` for a one-shot preview+validation run.
+
+### Find & fix a bug (single file)
+- `make find-bug FILE=path/to/@filename` – runs a heuristic linter/auto-fixer and prints a focused diff.
+  - List matches: `make find-bug-list FILE=@name`
+  - Choose match: `make find-bug-choose FILE=@name` (uses `fzf` if available; respects `CHOOSE_DEFAULT`)
+  - Env: `NON_VENDOR_ONLY=true|false` (default true)
+
+### Fix many files (bulk)
+- `make fix-all` – run the heuristic fixer across a set of files and print a summary table.
+  Env:
+  - `INCLUDE` – space-separated globs (e.g., "**/*.sh **/*.ts"). If empty, defaults to common types (`*.sh,*.ts,*.js,*.json,*.yaml,*.md,*.rs`).
+  - `EXCLUDE` – space-separated globs to skip (e.g., "**/generated/** **/*.min.js").
+  - `NON_VENDOR_ONLY=true|false` (default true) skips `node_modules/`, `vendor/`, `dist/`, `build/`.
+  - `JOBS` – parallel workers (default: CPU count).
+  - `SEARCH_ROOT` – base for non-git repos (default `.`).
+- `make fix-all-dry` – same as above but no writes; shows summary of would-be changes.
+  Supports: `*.sh` (shellcheck/shfmt), `*.ts/js` (eslint/prettier/tsc via pnpm), `*.json` (jq), `*.yaml` (yq), `*.rs` (cargo fmt), `*.md` (prettier).
+  - Ledger options:
+    - `make fix-all-preview-receipt` – dry-run (no writes) and emit `workstation/receipts/fixall-<ts>.json` (`mode:"dry-run"`).
+    - `make fix-all-receipt` – apply fixes and emit a receipt (`mode:"apply"`).
+
+#### Examples
+
+- Preview, no writes:
+  ```bash
+  NON_VENDOR_ONLY=true INCLUDE="**/*.sh **/*.ts" EXCLUDE="**/dist/** **/build/**" make fix-all-dry
+  ```
+
+- Run fixes in parallel:
+  ```bash
+  JOBS=8 INCLUDE="**/*.sh **/*.ts **/*.md" make fix-all
+  ```
+
+- Focus only on shell scripts:
+  ```bash
+  INCLUDE="**/*.sh" make fix-all
+  ```
+
+### CI & Local Hooks
+
+- GitHub Actions workflow: `.github/workflows/ledger-ci.yml` runs the strict preview + receipt validation on push/PR.  
+- Local guard: link `githooks/pre-commit` into `.git/hooks/pre-commit` to run the same ritual before every commit.
 
 ## Local Development
 
@@ -96,3 +175,7 @@ All configuration is centralized in `workstation/config.yaml` and `.env`:
 - **Least-privilege SAs** - Each service has minimal required permissions
 - **Daily verification** - Guardian drill ensures proper configuration
 - **Receipt trail** - Merkle-rooted audit log of workstation health
+- Preview with receipt (no writes):
+  ```bash
+  NON_VENDOR_ONLY=true INCLUDE="**/*.sh **/*.ts" EXCLUDE="**/dist/** **/build/**" make fix-all-preview-receipt
+  ```

@@ -61,22 +61,25 @@ jobs:
         run: |
           git config user.name "Guardian Drill Bot"
           git config user.email "guardian@vaultmesh.org"
-          
+
           DATE=$(date -u +%Y-%m-%d)
-          
+
           git add workstation/receipts/
-          
+
           if git diff --staged --quiet; then
             echo "No new receipts to commit"
           else
-            git commit -m "drill: Daily receipts for ${DATE}
+            cat <<EOF > /tmp/guardian-drill-commit.txt
+drill: Daily receipts for ${DATE}
 
 Automated Guardian Drill run
 - Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 - Status: ${{ steps.drill.outcome }}
 - Workflow: ${{ github.workflow }}
-- Run: ${{ github.run_number }}"
-            
+- Run: ${{ github.run_number }}
+EOF
+            git commit -F /tmp/guardian-drill-commit.txt
+
             git push
           fi
       

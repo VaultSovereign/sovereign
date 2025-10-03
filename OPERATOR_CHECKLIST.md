@@ -11,18 +11,30 @@
 gcloud auth login
 gcloud auth application-default login
 
+# 1.5 Preflight (optional but recommended)
+make gcloud-preflight           # add AUTO_ENABLE=true to auto-enable missing APIs
+
 # 2. IAM
-make gcloud:iam
+make gcloud-iam
 
 # 3. Config
-make gcloud:config
+make gcloud-config
 
 # 4. Workstation
-make gcloud:workstation
+make gcloud-workstation
 
 # 5. Drill
 make drill
+
+# Ledger (optional)
+make gcloud-preflight-receipt
+# or:
+# RECEIPT=true make gcloud-config
+# RECEIPT=true make gcloud-workstation
+# RECEIPT=true make gcloud-workstation-delete
 ```
+
+- Ledger: run `make gcloud-preflight-receipt` to emit `workstation/receipts/preflight-<ts>.json`.
 
 ---
 
@@ -38,11 +50,35 @@ make drill
 
 ---
 
+## 📜 Daily Ledger Ritual
+
+- Preview:
+  - `make ledger-compact-dryrun`
+  - `make ledger-verify`
+  - `make fix-all-preview-receipt`
+
+- Apply:
+  - `make ledger-compact`
+  - `make ledger-verify`
+  - `make fix-all-receipt`
+
+💡 **One command:**  
+- Preview: `make ledger-maintain-preview` (or `ledger-maintain-preview-receipt` to stamp the top-level run)  
+- Apply: `make ledger-maintain` (or `ledger-maintain-receipt` to stamp the top-level run)
+
+🔒 **Strict / CI:**
+- Preview fail-fast: `make ledger-maintain-preview-strict`
+- Apply fail-fast: `make ledger-maintain-strict`
+- Or set `STRICT=true` on any maintenance target (e.g., `STRICT=true make ledger-maintain-preview`).
+- Optional local guard: link `githooks/pre-commit` → `.git/hooks/pre-commit`.
+
+---
+
 ## 🛠️ Common Operations
 
 ### Start workstation
 ```bash
-gcloud workstations workstations start $WORKSTATION_ID \
+gcloud workstations start $WORKSTATION_ID \
   --cluster=$WORKSTATION_CLUSTER \
   --config=$WORKSTATION_CONFIG \
   --region=$REGION
@@ -50,7 +86,7 @@ gcloud workstations workstations start $WORKSTATION_ID \
 
 ### Stop workstation
 ```bash
-gcloud workstations workstations stop $WORKSTATION_ID \
+gcloud workstations stop $WORKSTATION_ID \
   --cluster=$WORKSTATION_CLUSTER \
   --config=$WORKSTATION_CONFIG \
   --region=$REGION
@@ -58,16 +94,12 @@ gcloud workstations workstations stop $WORKSTATION_ID \
 
 ### Open in browser
 ```bash
-gcloud workstations workstations start-tcp-tunnel $WORKSTATION_ID \
-  --cluster=$WORKSTATION_CLUSTER \
-  --config=$WORKSTATION_CONFIG \
-  --region=$REGION \
-  --local-host-port=:8080
+make gcloud-workstation-open
 ```
 
 ### Delete workstation
 ```bash
-./gcloud/delete-workstation.sh
+make gcloud-workstation-delete        # add FORCE=true to skip prompt
 ```
 
 ### Verify ADC
@@ -84,7 +116,7 @@ Before starting work:
 - [ ] `.env` file configured with correct `PROJECT_ID`, `REGION`
 - [ ] Service accounts created (`gcloud iam service-accounts list`)
 - [ ] Workstation config exists (`gcloud workstations configs list`)
-- [ ] Workstation running (`gcloud workstations workstations list`)
+- [ ] Workstation running (`gcloud workstations list`)
 
 ---
 
@@ -98,14 +130,14 @@ gcloud auth application-default print-access-token
 
 ### Missing service accounts
 ```bash
-make gcloud:iam
+make gcloud-iam
 gcloud iam service-accounts list
 ```
 
 ### Workstation won't start
 ```bash
 # Check status
-gcloud workstations workstations describe $WORKSTATION_ID \
+gcloud workstations describe $WORKSTATION_ID \
   --cluster=$WORKSTATION_CLUSTER \
   --config=$WORKSTATION_CONFIG \
   --region=$REGION
@@ -121,6 +153,39 @@ command -v cargo
 gcloud config get-value project
 gcloud auth application-default print-access-token
 ```
+
+---
+
+## 🧰 Bug fixing / bulk fixes
+
+- Single file:
+  - `make find-bug FILE=@name`
+  - `make find-bug-list FILE=@name`
+  - `make find-bug-choose FILE=@name`
+
+- Bulk:
+  - `make fix-all` (with INCLUDE/EXCLUDE env)
+  - `make fix-all-dry` (no writes, preview only)
+  - Ledger: `make fix-all-preview-receipt` (dry-run + receipt), `make fix-all-receipt` (apply + receipt)
+
+💡 **Ritual:** Always run `make fix-all-dry` first to preview changes, then apply with `make fix-all`.
+
+### Examples
+
+- Preview, no writes:
+  ```bash
+  NON_VENDOR_ONLY=true INCLUDE="**/*.sh **/*.ts" EXCLUDE="**/dist/** **/build/**" make fix-all-dry
+  ```
+
+- Run fixes in parallel:
+  ```bash
+  JOBS=8 INCLUDE="**/*.sh **/*.ts **/*.md" make fix-all
+  ```
+
+- Shell only:
+  ```bash
+  INCLUDE="**/*.sh" make fix-all
+  ```
 
 ---
 
