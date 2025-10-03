@@ -1,0 +1,27 @@
+# Single source of truth for the workstation
+name: sovereign
+region: ${REGION}
+cluster: ${WORKSTATION_CLUSTER}
+config: ${WORKSTATION_CONFIG}
+workstation_id: ${WORKSTATION_ID}
+
+machine:
+  cpu: 4
+  memory_gb: 16
+  disk_gb: 200
+  disk_type: BALANCED  # BALANCED | PERFORMANCE
+  ephemeral: false
+
+service_account: ${DEPLOYER_SA}@${PROJECT_ID}.iam.gserviceaccount.com
+labels:
+  app: sovereign
+  owner: vault
+  purpose: dev
+
+# Code editor base image (Cloud Workstations default)
+editor: "gcr.io/cloud-workstations-images/base:latest"
+
+startup:
+  script: ./workstation/startup.sh
+poststart:
+  script: ./workstation/poststart.sh

@@ -1,0 +1,75 @@
+{
+  "name": "Sovereign Workstation",
+  "dockerFile": "Dockerfile",
+  "context": "..",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true,
+      "upgradePackages": true,
+      "username": "vscode",
+      "userUid": "automatic",
+      "userGid": "automatic"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "nodeGypDependencies": true,
+      "version": "20",
+      "nvmVersion": "latest"
+    },
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "latest",
+      "profile": "default"
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true
+    },
+    "ghcr.io/devcontainers/features/google-cloud-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "latest"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss",
+        "rust-lang.rust-analyzer",
+        "ms-python.python",
+        "GoogleCloudTools.cloudcode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+
+  "forwardPorts": [3000, 8080, 8000, 5173],
+  "portsAttributes": {
+    "3000": {
+      "label": "Application",
+      "onAutoForward": "notify"
+    },
+    "8080": {
+      "label": "Server",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "postCreateCommand": "npm install -g pnpm && echo 'Sovereign Workstation DevContainer ready'",
+  "postStartCommand": "./workstation/poststart.sh || true",
+
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "PROJECT_ID": "${localEnv:PROJECT_ID}",
+    "REGION": "${localEnv:REGION}",
+    "CF_API_TOKEN": "${localEnv:CF_API_TOKEN}"
+  }
+}
