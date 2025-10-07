@@ -8,6 +8,7 @@
   "properties": {
     "kind": { "type": "string" },
     "ts":   { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}Z$" },
+    "schema_version": { "type": "string" },
     "mode": { "type": "string", "enum": ["dry-run", "apply"] },
     "params": { "type": "object", "additionalProperties": true },
     "stats":  { "type": "object", "additionalProperties": true },
@@ -26,7 +27,31 @@
     },
     "links": { "type": "object", "additionalProperties": true },
     "verify_ok": { "type": "boolean" },
-    "status": { "type": "string" }
+    "status": { "type": "string" },
+    "timezone": { "type": "string" },
+    "date_utc": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "hash_algo": { "type": "string", "enum": ["BLAKE3-256", "SHA256"] },
+    "canonicalization": { "type": "string" },
+    "domain_separation": {
+      "type": "object",
+      "required": ["leaf", "node"],
+      "properties": {
+        "leaf": { "type": "string", "pattern": "^[0-9a-fA-F]{2}$" },
+        "node": { "type": "string", "pattern": "^[0-9a-fA-F]{2}$" }
+      },
+      "additionalProperties": true
+    },
+    "domain_version": { "type": ["string", "number"] },
+    "order": { "type": "string" },
+    "inputs_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "leaf_count": { "type": "number" },
+    "pruned_count": { "type": "number" },
+    "count": { "type": "number" },
+    "keep": { "type": "number" },
+    "root_ts": { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}Z$" },
+    "proof_ts": { "type": "string", "pattern": "^[0-9]{8}T[0-9]{6}Z$" },
+    "receipt_len": { "type": "number" },
+    "receipt_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
   },
   "allOf": [
     {
@@ -72,6 +97,26 @@
       }
     },
     {
+      "if": { "properties": { "kind": { "const": "workstation.create" } } },
+      "then": {
+        "required": ["mode", "params", "status"],
+        "properties": {
+          "mode": { "enum": ["dry-run", "apply"] },
+          "params": {
+            "type": "object",
+            "properties": {
+              "project": { "type": "string" },
+              "region":  { "type": "string" },
+              "cluster": { "type": "string" },
+              "config":  { "type": "string" },
+              "workstation": { "type": "string" }
+            }
+          },
+          "status": { "const": "ok" }
+        }
+      }
+    },
+    {
       "if": { "properties": { "kind": { "const": "workstation.run" } } },
       "then": {
         "required": ["mode", "params", "status"],
@@ -100,12 +145,102 @@
     {
       "if": { "properties": { "kind": { "const": "workstation.daily" } } },
       "then": {
-        "required": ["day", "algo", "root", "count", "files"],
+        "required": ["day", "root", "files"],
         "properties": {
           "day":  { "type": "string", "pattern": "^[0-9]{8}$" },
-          "algo": { "enum": ["BLAKE3-256", "SHA256"] },
           "root": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-          "count": { "type": "number" }
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["file", "leaf_hash", "retained"],
+              "properties": {
+                "index": { "type": "number" },
+                "file": { "type": "string" },
+                "leaf_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "retained": { "type": "boolean" },
+                "proof": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "canonicalization": { "const": "JCS-RFC8785" } } },
+            "then": {
+              "required": [
+                "schema_version",
+                "timezone",
+                "date_utc",
+                "hash_algo",
+                "canonicalization",
+                "domain_separation",
+                "domain_version",
+                "order",
+                "inputs_digest",
+                "leaf_count",
+                "count",
+                "pruned_count"
+              ]
+            },
+            "else": {
+              "required": ["algo", "count"],
+              "properties": {
+                "algo": { "enum": ["BLAKE3-256", "SHA256"] },
+                "count": { "type": "number" }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "workstation.proof" } } },
+      "then": {
+        "required": [
+          "schema_version",
+          "timezone",
+          "day",
+          "date_utc",
+          "file",
+          "leaf_hash",
+          "leaf_index",
+          "root",
+          "hash_algo",
+          "canonicalization",
+          "domain_version",
+          "domain_separation",
+          "order",
+          "root_ts",
+          "proof_ts",
+          "receipt_len",
+          "receipt_hash",
+          "path",
+          "receipt_b64"
+        ],
+        "properties": {
+          "day": { "type": "string", "pattern": "^[0-9]{8}$" },
+          "date_utc": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "file": { "type": "string" },
+          "leaf_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "leaf_index": { "type": "number" },
+          "root": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["dir", "hash"],
+              "properties": {
+                "dir": { "type": "string", "enum": ["left", "right"] },
+                "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "receipt_len": { "type": "number" },
+          "receipt_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "receipt_b64": { "type": "string" }
         }
       }
     },

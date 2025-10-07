@@ -35,12 +35,22 @@ make gcloud-workstation                  # create a new workstation
 - Receipts: `RECEIPT=true` (Make target already sets this), `RECEIPTS_DIR` (default `workstation/receipts`)
 
 ### Ledger
-- `make ledger-compact` – compute daily Merkle roots of receipts and prune older receipts per day (default KEEP=5).
-  Env: `RECEIPTS_DIR`, `DAILY_DIR`, `KEEP` (optional).
+- `make ledger-compact` – canonicalize receipts (JCS), hash with domain separation, emit daily roots + proofs, and prune older receipts per day (default KEEP=5).
+  Env: `RECEIPTS_DIR`, `DAILY_DIR`, `PROOFS_DIR`, `KEEP`, `LEDGER_HASH=blake3|sha256` (default `blake3`), `LEDGER_DOMAIN_VERSION` (default `1`), `FORCE=true|false` (allow pruning without proofs), `VERBOSE`.
 - `make ledger-compact-dryrun` – show exactly which receipts would be kept/pruned and the resulting root(s), but perform no writes/deletes.
-  Env: `KEEP`, `VERBOSE=true|false` (default true), plus `RECEIPTS_DIR`/`DAILY_DIR`.
-- `make ledger-verify` – recompute and verify stored daily roots.  
-  Env: `RECEIPTS_DIR`, `DAILY_DIR`, `DAY=YYYYMMDD` (optional single-day), `STRICT=true|false` (fail if any listed file missing; default false).
+  Env: `KEEP`, `VERBOSE=true|false` (default true), plus `RECEIPTS_DIR`/`DAILY_DIR`/`PROOFS_DIR`, `LEDGER_HASH` (for parity checks).
+- `make ledger-verify` – recompute and verify stored daily roots, inclusion proofs, and canonical receipts.
+  Env: `RECEIPTS_DIR`, `DAILY_DIR`, `PROOFS_DIR`, `DAY=YYYYMMDD` (optional single-day), `STRICT=true|false` (fail if any listed file missing; default false), `LEDGER_HASH` (defaults to metadata algorithm), `LEDGER_DOMAIN_VERSION` (default `1`).
+  Legacy fixtures (optional):
+  ```bash
+  if compgen -G "workstation/receipts/fixtures/legacy/*/*.json" >/dev/null; then
+    RECEIPTS_DIR=workstation/receipts/fixtures/legacy STRICT=true make ledger-verify
+  fi
+  ```
+- `make ledger-selftest` – run the covenant script (modern verification + domain/proof invariants; legacy verify only if fixtures exist).
+  Env: inherits `KEEP`, `VERBOSE`, `LEDGER_DOMAIN_VERSION`, `SELFTEST_PROOFS`, `RECEIPTS_DIR`, `DAILY_DIR`, `PROOFS_DIR`.
+
+Daily roots are written to `workstation/receipts/daily/<YYYYMMDD>.json` with Merkle metadata (schema v1.1) including `domain_version` for future rotations. When receipts are pruned, inclusion proofs and the canonical JCS payload are stored under `workstation/receipts/daily/proofs/<day>/<leaf_hash>.json`. These artifacts are validated by `ledger-verify` and the receipt validator (`scripts/receipt-validate.sh`).
 
 ### Maintenance (one command)
 - `make ledger-maintain-preview` – plan-only: compact (dry-run), verify, and fix-all preview (with its own receipt).  
@@ -49,9 +59,9 @@ make gcloud-workstation                  # create a new workstation
 - Ledger options:  
   - `make ledger-maintain-preview-receipt` – preview + top-level maintenance receipt  
   - `make ledger-maintain-receipt` – apply + top-level maintenance receipt
-- Strict / CI helpers:  
-  - `make ledger-maintain-preview-strict` (or `STRICT=true make ledger-maintain-preview`) to fail fast when verify mismatches.  
-  - `make ledger-maintain-strict` for the apply path, and `make ci-ledger` for a one-shot preview+validation run.
+- Strict / CI helpers:
+  - `make ledger-maintain-preview-strict` (or `STRICT=true make ledger-maintain-preview`) to fail fast when verify mismatches.
+  - `make ledger-maintain-strict` for the apply path, and `make ci-ledger` for the full covenant bundle (validate → dry-run compact → modern verify → optional legacy verify → selftest).
 
 ### Find & fix a bug (single file)
 - `make find-bug FILE=path/to/@filename` – runs a heuristic linter/auto-fixer and prints a focused diff.
@@ -92,7 +102,9 @@ make gcloud-workstation                  # create a new workstation
 
 ### CI & Local Hooks
 
-- GitHub Actions workflow: `.github/workflows/ledger-ci.yml` runs the strict preview + receipt validation on push/PR.  
+- GitHub Actions workflows:
+  - `.github/workflows/ledger.yml` runs `make ci-ledger` (including the covenant self-test) on push/PR touching ledger-critical paths.
+  - `.github/workflows/ledger-ci.yml` keeps the legacy strict preview + receipt validation for broader pushes.
 - Local guard: link `githooks/pre-commit` into `.git/hooks/pre-commit` to run the same ritual before every commit.
 
 ## Local Development
