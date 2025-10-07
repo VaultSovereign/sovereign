@@ -1,0 +1,85 @@
+name: Ledger Covenant
+
+on:
+  pull_request:
+  push:
+    paths:
+      - 'Makefile'
+      - 'scripts/**'
+      - 'receipt.schema.json'
+      - 'docs/schemas/receipt.schema.json'
+      - 'workstation/**'
+      - '.github/workflows/ledger.yml'
+
+concurrency:
+  group: ledger-covenant-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  covenant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        algo: [blake3, sha256]
+        include:
+          - algo: blake3
+            need_b3sum: true
+          - algo: sha256
+            need_b3sum: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq openssl coreutils python3 || true
+          sudo apt-get install -y b3sum || true
+
+      - name: Check required tooling
+        run: |
+          if [ "${{ matrix.need_b3sum }}" = "true" ] && ! command -v b3sum >/dev/null; then
+            echo "b3sum required for blake3 leg"
+            exit 1
+          fi
+
+      - name: Run ledger CI
+        env:
+          KEEP: 5
+          VERBOSE: "true"
+          LEDGER_DOMAIN_VERSION: "1"
+          LEDGER_HASH: ${{ matrix.algo }}
+        run: |
+          set -euo pipefail
+          make ci-ledger
+
+      - name: Matrix end-to-end emission (ephemeral)
+        env:
+          LEDGER_HASH: ${{ matrix.algo }}
+        run: |
+          set -euo pipefail
+          tmp_dir="$(mktemp -d tmp-ci-XXXXXX)"
+          mkdir -p "$tmp_dir/receipts"
+          cat >"$tmp_dir/receipts/a-20250101T000000Z.json" <<'EOF'
+{"kind":"test.run","ts":"20250101T000000Z","value":1}
+EOF
+          cat >"$tmp_dir/receipts/b-20250101T000100Z.json" <<'EOF'
+{"kind":"test.run","ts":"20250101T000100Z","value":2}
+EOF
+          RECEIPTS_DIR="$tmp_dir/receipts" LEDGER_HASH="$LEDGER_HASH" VERBOSE=true make ledger-compact
+          RECEIPTS_DIR="$tmp_dir/receipts" LEDGER_HASH="$LEDGER_HASH" STRICT=true make ledger-verify
+          rm -rf "$tmp_dir"
+
+      - name: Upload ledger artifacts on failure
+        if: failure() && github.event.repository.private == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ledger-${{ matrix.algo }}-${{ github.sha }}
+          path: |
+            workstation/receipts/daily/**/*.json
+            workstation/receipts/*.json
+            tmp-ci-*/**/*.json
+          if-no-files-found: ignore
+          retention-days: 7

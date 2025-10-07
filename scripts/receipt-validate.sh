@@ -4,7 +4,18 @@ set -euo pipefail
 # Usage: scripts/receipt-validate.sh <file.json>
 
 f="${1:-}"; [[ -n "$f" && -f "$f" ]] || { echo "usage: $0 <file.json>"; exit 2; }
-SCHEMA="docs/schemas/receipt.schema.json"
+SCHEMA_DEFAULT="docs/schemas/receipt.schema.json"
+SCHEMA="${SCHEMA:-$SCHEMA_DEFAULT}"
+if [[ ! -f "$SCHEMA" ]]; then
+  if [[ -f "receipt.schema.json" ]]; then
+    SCHEMA="receipt.schema.json"
+  elif [[ -f "$SCHEMA_DEFAULT" ]]; then
+    SCHEMA="$SCHEMA_DEFAULT"
+  else
+    echo "✖ schema file not found" >&2
+    exit 1
+  fi
+fi
 
 have_npx()  { command -v npx  >/dev/null 2>&1; }
 have_jq()   { command -v jq   >/dev/null 2>&1; }
@@ -34,7 +45,43 @@ case "$kind" in
     jq -e '.params|type=="object"' "$f" >/dev/null || { echo "✖ .params required"; exit 1; }
     ;;
   workstation.daily)
-    jq -e '(.day and .root and (.files|type=="array"))' "$f" >/dev/null || { echo "✖ daily shape"; exit 1; }
+    if jq -e '.canonicalization? == "JCS-RFC8785"' "$f" >/dev/null; then
+      jq -e '
+        (.day|test("^[0-9]{8}$")) and
+        (.date_utc|test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and
+        (.timezone == "UTC") and
+        (.hash_algo|test("^(BLAKE3-256|SHA256)$")) and
+        (.domain_version|tostring|test("^[0-9]+$")) and
+        (.domain_separation.leaf == "00") and
+        (.domain_separation.node == "01") and
+        (.order == "asc-leaf-hash") and
+        (.inputs_digest|test("^[0-9a-f]{64}$")) and
+        (.leaf_count|type=="number") and
+        (.pruned_count|type=="number") and
+        (.files|type=="array") and
+        (all(.files[]; (.file and (.leaf_hash|test("^[0-9a-f]{64}$")) and (.retained|type=="boolean"))))
+      ' "$f" >/dev/null || { echo "✖ daily shape (modern)"; exit 1; }
+    else
+      jq -e '(.day and .algo and .root and (.files|type=="array"))' "$f" >/dev/null || { echo "✖ daily shape (legacy)"; exit 1; }
+    fi
+    ;;
+  workstation.proof)
+    jq -e '
+      (.schema_version and .timezone == "UTC") and
+      (.day|test("^[0-9]{8}$")) and
+      (.date_utc|test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and
+      (.file and (.leaf_hash|test("^[0-9a-f]{64}$"))) and
+      (.leaf_index|type=="number") and
+      (.root|test("^[0-9a-f]{64}$")) and
+      (.hash_algo|test("^(BLAKE3-256|SHA256)$")) and
+      (.domain_version|tostring|test("^[0-9]+$")) and
+      (.domain_separation.leaf == "00") and
+      (.domain_separation.node == "01") and
+      (.order == "asc-leaf-hash") and
+      (.path|type=="array") and
+      (all(.path[]; ((.dir == "left") or (.dir == "right")) and (.hash|test("^[0-9a-f]{64}$")))) and
+      (.receipt_b64|type=="string")
+    ' "$f" >/dev/null || { echo "✖ proof shape"; exit 1; }
     ;;
   maintenance.run)
     jq -e '.mode and (.verify_ok|type=="boolean")' "$f" >/dev/null || { echo "✖ maintenance shape"; exit 1; }

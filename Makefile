@@ -1,6 +1,10 @@
 -include .env
 
-.PHONY: gcloud-iam gcloud-config gcloud-workstation gcloud-workstation-open gcloud-workstation-delete gcloud-preflight gcloud-preflight-receipt gcloud-config-receipt gcloud-workstation-receipt gcloud-workstation-delete-receipt ledger-compact ledger-compact-dryrun ledger-verify find-bug fix-bug find-bug-list find-bug-choose fix-all fix-all-dry fix-all-preview-receipt fix-all-receipt ledger-maintain ledger-maintain-preview ledger-maintain-receipt ledger-maintain-preview-receipt ledger-maintain-strict ledger-maintain-preview-strict receipts-validate receipts-validate-all drill local
+KEEP ?= 5
+VERBOSE ?= true
+LEDGER_DOMAIN_VERSION ?= 1
+
+.PHONY: gcloud-iam gcloud-config gcloud-workstation gcloud-workstation-open gcloud-workstation-delete gcloud-preflight gcloud-preflight-receipt gcloud-config-receipt gcloud-workstation-receipt gcloud-workstation-delete-receipt ledger-compact ledger-compact-dryrun ledger-verify ledger-selftest ci-ledger find-bug fix-bug find-bug-list find-bug-choose fix-all fix-all-dry fix-all-preview-receipt fix-all-receipt ledger-maintain ledger-maintain-preview ledger-maintain-receipt ledger-maintain-preview-receipt ledger-maintain-strict ledger-maintain-preview-strict receipts-validate receipts-validate-all drill local
 
 gcloud-iam:
 	@bash gcloud/iam-bootstrap.sh
@@ -31,15 +35,29 @@ gcloud-workstation-delete:
 gcloud-workstation-delete-receipt:
 	@RECEIPT=true RECEIPTS_DIR=$${RECEIPTS_DIR:-workstation/receipts} FORCE=$${FORCE} STOP_FIRST=$${STOP_FIRST} PROJECT_ID=$${PROJECT_ID} REGION=$${REGION} CLUSTER_ID=$${CLUSTER_ID} CONFIG_ID=$${CONFIG_ID} WORKSTATION_ID=$${WORKSTATION_ID} bash gcloud/delete-workstation.sh
 
+# Honors caller's LEDGER_HASH (blake3|sha256); single invocation (no duplicate run).
 ledger-compact:
-	@RECEIPTS_DIR=$${RECEIPTS_DIR:-workstation/receipts} DAILY_DIR=$${DAILY_DIR:-workstation/receipts/daily} KEEP=$${KEEP:-5} bash scripts/ledger-compact.sh
+	@LEDGER_HASH=$${LEDGER_HASH:-blake3} \
+	  RECEIPTS_DIR=$${RECEIPTS_DIR:-workstation/receipts} \
+	  DAILY_DIR=$${DAILY_DIR:-workstation/receipts/daily} \
+	  KEEP=$${KEEP:-5} \
+	  bash scripts/ledger-compact.sh
 
+# Preview-only; same hashing path as ledger-compact.
 ledger-compact-dryrun:
-	@RECEIPTS_DIR=$${RECEIPTS_DIR:-workstation/receipts} DAILY_DIR=$${DAILY_DIR:-workstation/receipts/daily} KEEP=$${KEEP:-5} DRY_RUN=true VERBOSE=$${VERBOSE:-true} bash scripts/ledger-compact.sh
+	@LEDGER_HASH=$${LEDGER_HASH:-blake3} \
+	  RECEIPTS_DIR=$${RECEIPTS_DIR:-workstation/receipts} \
+	  DAILY_DIR=$${DAILY_DIR:-workstation/receipts/daily} \
+	  KEEP=$${KEEP:-5} \
+	  DRY_RUN=true VERBOSE=$${VERBOSE:-true} \
+	  bash scripts/ledger-compact.sh
 
 # Recompute and verify daily roots. Set DAY=YYYYMMDD to verify a single day.
 ledger-verify:
 	@RECEIPTS_DIR=$${RECEIPTS_DIR:-workstation/receipts} DAILY_DIR=$${DAILY_DIR:-workstation/receipts/daily} DAY=$${DAY} STRICT=$${STRICT:-false} bash scripts/ledger-verify.sh
+
+ledger-selftest:
+	@./scripts/ledger-selftest.sh
 
 find-bug:
 	@bash scripts/find-fix-bug.sh "$(FILE)"
@@ -95,8 +113,17 @@ receipts-validate-all:
 
 .PHONY: ci-ledger
 ci-ledger:
-	@STRICT=true KEEP=$${KEEP:-3} VERBOSE=$${VERBOSE:-true} $(MAKE) ledger-maintain-preview
+	@echo "== Ledger covenant (CI) =="
 	@$(MAKE) receipts-validate-all
+	@KEEP=$(KEEP) VERBOSE=$(VERBOSE) LEDGER_HASH=$${LEDGER_HASH:-blake3} $(MAKE) ledger-compact-dryrun
+	@STRICT=false LEDGER_HASH=$${LEDGER_HASH:-blake3} $(MAKE) ledger-verify
+	@if find workstation/receipts/fixtures/legacy -mindepth 2 -maxdepth 2 -name '*.json' 2>/dev/null | grep -q .; then \
+		 echo "== Legacy fixtures detected → STRICT verify"; \
+		 RECEIPTS_DIR=workstation/receipts/fixtures/legacy STRICT=true LEDGER_HASH=$${LEDGER_HASH:-blake3} $(MAKE) ledger-verify; \
+	else \
+		 echo "• No legacy fixtures; skipping legacy verify (as designed)"; \
+	fi
+	@LEDGER_DOMAIN_VERSION=$(LEDGER_DOMAIN_VERSION) LEDGER_HASH=$${LEDGER_HASH:-blake3} ./scripts/ledger-selftest.sh
 
 # Preflight: ADC, APIs, region probe, quotas, network (optional)
 gcloud-preflight:
