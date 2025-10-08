@@ -1,0 +1,42 @@
+name: Publish Ledger
+on:
+  workflow_dispatch:
+    inputs:
+      bucket:
+        description: "GCS bucket (gs://sovereign-roots)"
+        required: true
+      dry_run:
+        description: "Preview only (true/false)"
+        required: false
+        default: "false"
+  schedule:
+    - cron: "15 1 * * *"  # daily at 01:15 UTC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PUBLISH_BUCKET: ${{ inputs.bucket }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup gcloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_PUBLISHER_SA }}
+      - name: Install gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Verify workstation receipts
+        run: |
+          make ledger-maintain || true
+          make ledger-verify
+      - name: Publish
+        run: bash scripts/ledger-publish.sh
