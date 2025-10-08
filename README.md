@@ -1,10 +1,37 @@
 # Sovereign Workstation
 
-Declarative workstation for VaultMesh dev:
-- **Google Cloud Workstations** (ADC first, least-privilege SAs)
-- **Local bootstrap** (macOS/Linux)
-- **Daily guardian drill** with receipts + Merkle root
-- **DevContainer support** for symmetric dev environments
+[![OpenSSF Scorecard](https://github.com/VaultSovereign/sovereign/actions/workflows/scorecard.yml/badge.svg?branch=main&label=OpenSSF%20Scorecard)](https://github.com/VaultSovereign/sovereign/actions/workflows/scorecard.yml)
+[![Dependency Review](https://github.com/VaultSovereign/sovereign/actions/workflows/dependency-review.yml/badge.svg?branch=main&label=Dependency%20Review)](https://github.com/VaultSovereign/sovereign/actions/workflows/dependency-review.yml)
+[![SBOM](https://github.com/VaultSovereign/sovereign/actions/workflows/sbom.yml/badge.svg?branch=main&label=SBOM%20CycloneDX)](https://github.com/VaultSovereign/sovereign/actions/workflows/sbom.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+**Workflow Runs** →  
+• [OpenSSF Scorecard](../../actions/workflows/scorecard.yml) •  
+[Dependency Review](../../actions/workflows/dependency-review.yml) •  
+[SBOM (CycloneDX)](../../actions/workflows/sbom.yml)
+
+**Sovereign Workstation** is the auditable, declarative development substrate for the VaultMesh ledger—each invocation produces receipts, proofs, and attestation ready for publication.
+
+## Core features
+
+- **Google Cloud Workstations** with ADC-first, least-privilege IAM workflows.
+- **Local bootstrap** scripts for macOS and Linux parity.
+- **Daily guardian drill** with Merkle-rooted receipts and proofs.
+- **Supply-chain guardianship** via OpenSSF Scorecard, Dependabot, dependency review gating, and CycloneDX SBOMs.
+- **Ledger publication rite** using `scripts/ledger-publish.sh` with dry-run and KMS signing hook.
+- **OPA policy gate** (`policy/validate_config.rego`) ready for Makefile integration.
+- **DevContainer support** for symmetric development environments.
+
+## Security & provenance
+
+- [Security policy](SECURITY.md) — disclosure process, response SLOs, and supported branches.
+- [OpenSSF Scorecard workflow](.github/workflows/scorecard.yml) — repository health and posture checks.
+- [Dependency review](.github/workflows/dependency-review.yml) — blocks vulnerable upgrades on pull requests.
+- [CycloneDX SBOM workflow](.github/workflows/sbom.yml) — generates `sbom.cdx.json` artifacts for pushes and dispatches.
+- [Publish ledger workflow](.github/workflows/publish-ledger.yml) — automates syncing `workstation/receipts/daily` to GCS.
+- [Ledger publish script](scripts/ledger-publish.sh) — idempotent rsync with dry-run and optional KMS signing hook.
+
+*Solve et Coagula — dissolve uncertainty, preserve sovereign memory.*
 
 ## Quick start (Cloud Workstations)
 
